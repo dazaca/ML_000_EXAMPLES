@@ -1,0 +1,186 @@
+---
+title: "EXAMPLE 1: k-NN applied to Wisconsin Breast Cancer Diagnostic dataset"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown code + notes
+
+Wisconsin Breast Cancer Diagnostic dataset from the UCI Machine Learning Repository at http://archive.ics.uci.edu/ml. This data was donated by researchers of the University of Wisconsin and includes the measurements from digitized images of fine-needle aspirate of a breast mass. The values represent the characteristics of the cell nuclei present in the digital image. 
+
+The breast cancer data includes 569 examples of cancer biopsies, each with 32 features. One feature is an identification number, another is the cancer diagnosis, and 30 are numeric-valued laboratory measurements. The diagnosis is coded as "M" to indicate malignant or "B" to indicate benign.
+
+The other 30 numeric measurements comprise the mean, standard error, and worst (that is, largest) value for 10 different characteristics of the digitized cell nuclei. These include:
+
+
+- Radius
+- Texture
+- Perimeter
+- Area
+- Smoothness
+- Compactness
+- Concavity
+- Concave points
+- Symmetry
+- Fractal dimension
+
+Based on these names, all the features seem to relate to the shape and size of the cell nuclei.
+
+## 1-Collecting, exploring and preparing the data
+
+```{r}
+# getwd()
+wbcd <- read.csv("wisc_bc_data.csv", stringsAsFactors = FALSE)
+str(wbcd)
+wbcd<- wbcd[-1]
+table(wbcd$diagnosis)
+wbcd$diagnosis <- factor(wbcd$diagnosis, levels = c("B", "M"),
+labels = c("Benign", "Malignant"))
+prop.table(table(wbcd$diagnosis))
+round(prop.table(table(wbcd$diagnosis)) * 100, digits = 1)
+
+summary(wbcd[c("radius_mean", "area_mean", "smoothness_mean")])
+# Since smoothness ranges from 0.05 to 0.16 and area ranges from 143.5 to 2501.0, the impact of area is going to be much larger than the smoothness in the distance calculation. This could potentially cause problems for our classifier, so let's apply normalization to rescale the features to a standard range of values.
+```
+
+# Transformation – normalizing numeric data
+
+```{r}
+# "normalize": this function takes a vector x of numeric values, and for each value in x, subtracts the minimum value in x and divides by the range of values in x. Finally, the resulting vector is returned. 
+normalize <- function(x) {
+       return ((x - min(x)) / (max(x) - min(x)))
+}
+
+# We can now apply the normalize() function to the numeric features in our data frame. Rather than normalizing each of the 30 numeric variables individually, we will use one of R's functions to automate the process.
+# 
+# The lapply() function takes a list and applies a specified function to each list element. As a data frame is a list of equal-length vectors, we can use lapply() to apply normalize() to each feature in the data frame. The final step is to convert the list returned by lapply() to a data frame, using the as.data.frame() function.
+
+wbcd_n <- as.data.frame(lapply(wbcd[2:31], normalize))
+
+summary(wbcd_n$area_mean)
+
+```
+
+# Data preparation – creating training and test datasets
+
+```{r}
+# A training dataset will be used to build the k-NN model and a test dataset that will be used to estimate the predictive accuracy of the model. We will use the first 469 records for the training dataset and the remaining 100 to simulate new patients:
+
+wbcd_train <- wbcd_n[1:469, ]
+wbcd_test <- wbcd_n[470:569, ]
+
+# it is important that each dataset is a representative subset of the full set of data. The wbcd records were already randomly ordered, so we could simply extract 100 consecutive records to create a test dataset. This would not be appropriate if the data was ordered chronologically or in groups of similar values. In these cases, random sampling methods would be needed.
+
+# When we constructed our normalized training and test datasets, we excluded the target variable, diagnosis. For training the k-NN model, we will need to store these class labels in factor vectors, split between the training and test datasets:
+
+# Labels vectors:
+wbcd_train_labels <- wbcd[1:469, 1]
+wbcd_test_labels <- wbcd[470:569, 1]
+
+summary (wbcd_train_labels)
+summary (wbcd_test_labels)
+```
+
+## 2-Training a model on the data
+```{r}
+# install.packages("class")
+library(class)
+
+# Ready to classify our unknown records. For the k-NN algorithm, the training phase actually involves no model building; the process of training a lazy learner like k-NN simply involves storing the input data in a structured format.
+
+# We've split our data into training and test datasets, each with exactly the same numeric features. The labels for the training data are stored in a separate factor vector. The only remaining parameter is k, which specifies the number of neighbors to include in the vote.
+
+# As our training data includes 469 instances, we might try k = 21, an odd number roughly equal to the square root of 469. With a two-category outcome, using an odd number eliminates the chance of ending with a tie vote.
+
+wbcd_test_pred <- knn(train = wbcd_train, test = wbcd_test,
+                        cl = wbcd_train_labels, k = 21)
+
+```
+
+
+## 3-Evaluating model performance
+```{r}
+# The next step of the process is to evaluate how well the predicted classes in the wbcd_test_pred vector match up with the known values in the wbcd_test_labels vector. To do this, we can use the CrossTable() function in the gmodels package:
+
+# install.packages("gmodels")
+
+library(gmodels)
+
+# After loading the package with the library(gmodels) command, we can create a cross tabulation indicating the agreement between the two vectors. Specifying prop.chisq = FALSE will remove the unnecessary chi-square values from the output:
+
+CrossTable(x = wbcd_test_labels, y = wbcd_test_pred,
+                       prop.chisq=FALSE)
+
+# The cell percentages in the table indicate the proportion of values that fall into four categories. The top-left cell indicates the true negative results. These 61 of 100 values are cases where the mass was benign and the k-NN algorithm correctly identified it as such. The bottom-right cell indicates the true positive results, where the classifier and the clinically determined label agree that the mass is malignant. A total of 37 of 100 predictions were true positives.
+
+# The cells falling on the other diagonal contain counts of examples where the k-NN approach disagreed with the true label. The two examples in the lower-left cell are false negative results; in this case, the predicted value was benign, but the tumor was actually malignant. Errors in this direction could be extremely costly as they might lead a patient to believe that she is cancer-free, but in reality, the disease may continue to spread. The top-right cell would contain the false positive results, if there were any. These values occur when the model classifies a mass as malignant, but in reality, it was benign. Although such errors are less dangerous than a false negative result, they should also be avoided as they could lead to additional financial burden on the health care system or additional stress for the patient as additional tests or treatment may have to be provided.
+
+# A total of 2 out of 100, or 2 percent of masses were incorrectly classified by the k-NN approach. While 98 percent accuracy seems impressive for a few lines of R code, we might try another iteration of the model to see whether we can improve the performance and reduce the number of values that have been incorrectly classified, particularly because the errors were dangerous false negatives.
+
+```
+
+
+## 4-Improving model performance
+```{r}
+
+# Two simple variations on our previous classifier. First, we will employ an alternative method for rescaling our numeric features. Second, we will try several different values for k.
+
+```
+```{r}
+```
+```{r}
+# - Transformation – z-score standardization
+```
+```{r}
+
+# Although normalization is traditionally used for k-NN classification, it may not always be the most appropriate way to rescale features. Since the z-score standardized values have no predefined minimum and maximum, extreme values are not compressed towards the center. One might suspect that with a malignant tumor, we might see some very extreme outliers as the tumors grow uncontrollably. It might, therefore, be reasonable to allow the outliers to be weighted more heavily in the distance calculation. Let's see whether z-score standardization can improve our predictive accuracy.
+
+# To standardize a vector, we can use the R's built-in scale() function, which, by default, rescales values using the z-score standardization. The scale() function offers the additional benefit that it can be applied directly to a data frame, so we can avoid the use of the lapply() function. To create a z-score standardized version of the wbcd data, we can use the following command:
+
+wbcd_z <- as.data.frame(scale(wbcd[-1]))
+
+# This command rescales all the features, with the exception of diagnosis and stores the result as the wbcd_z data frame. The _z suffix is a reminder that the values were z-score transformed. 
+
+# To confirm that the transformation was applied correctly, we can look at the summary statistics:
+
+summary(wbcd_z$area_mean)
+
+# The mean of a z-score standardized variable should always be zero, and the range should be fairly compact. A z-score greater than 3 or less than -3 indicates an extremely rare value. With this in mind, the transformation seems to have worked.
+
+# As we had done earlier, we need to divide the data into training and test sets, and then classify the test instances using the knn() function. We'll then compare the predicted labels to the actual labels using CrossTable()
+
+wbcd_train <- wbcd_z[1:469, ]
+wbcd_test <- wbcd_z[470:569, ]
+wbcd_train_labels <- wbcd[1:469, 1]
+wbcd_test_labels <- wbcd[470:569, 1]
+wbcd_test_pred <- knn(train = wbcd_train, test = wbcd_test,
+                      cl = wbcd_train_labels, k = 21)
+CrossTable(x = wbcd_test_labels, y = wbcd_test_pred,
+                     prop.chisq = FALSE)
+
+# Unfortunately, in the following table, the results of our new transformation show a slight decline in accuracy. The instances where we had correctly classified 98 percent of examples previously, we classified only 95 percent correctly this time. Making matters worse, we did no better at classifying the dangerous false negatives.
+
+```
+```{r}
+# - Testing alternative values of k
+```
+```{r}
+# We may be able do even better by examining performance across various k values. Using the normalized training and test datasets, the same 100 records were classified using several different k values. The number of false negatives and false positives are shown for each iteration:
+
+#       k value | False negatives | False positives | Percent classified incorrectly
+#          1                1               3                   4%
+#          5                2               0                   2%
+#          11               3               0                   3%
+#          15               3               0                   3%
+#          21               2               0                   2%
+#          27               4               0                   4%
+
+# Although the classifier was never perfect, the 1-NN approach was able to avoid some of the false negatives at the expense of adding false positives. It is important to keep in mind, however, that it would be unwise to tailor our approach too closely to our test data; after all, a different set of 100 patient records is likely to be somewhat different from those used to measure our performance.
+
+# If you need to be certain that a learner will generalize to future data, you might create several sets of 100 patients at random and repeatedly retest the result. The methods to carefully evaluate the performance of machine learning models will be discussed further in Chapter 10, Evaluating Model Performance (Machine Learning with R - Second Edition. Lantz)
+
+```
+
