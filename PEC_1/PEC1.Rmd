@@ -1,0 +1,312 @@
+---
+title: "PEC1"
+author: "David Zafra Cámara"
+date: "`r format(Sys.Date(),'%e de %B, %Y')`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(error = TRUE)
+```
+
+```{r libraries, include=FALSE}
+# Install packages
+
+# install.packages("gsubfn")
+# install.packages("stringr")
+# install.packages("data.table")
+# install.packages(“plyr”)
+# install.packages(“dplyr”)
+# install.packages("class")
+# install.packages("caret")
+# install.packages("gmodels")
+ 
+
+
+# Load packages
+# ...
+
+library(knitr)
+library(gsubfn)
+library(stringr)
+library(data.table)
+library(plyr)
+library(dplyr)
+library(class)
+library(caret)
+library(gmodels)
+
+```
+
+
+# Índice
+1. [Ejercicio 1. Algoritmo k-NN](#ejercicio-1.-algoritmo-k-nn)
+2. [Ejercicio 2. Funcion One-hot](#ejercicio-2.-funcion-one-hot)
+3. [Ejercicio 3. Script clasificador k-NN](#ejercicio-3.-script-clasificador-k-nn)
+4. [Fuentes de información](#fuentes-de-información)
+
+
+## Ejercicio 1. Algoritmo k-NN
+
+Escribir en el informe una sección con el título “Algoritmo k-NN” en el que se haga una breve explicación
+de su funcionamiento y sus características. Además, se presente una tabla de sus fortaleza y debilidades.
+
+> * El algoritmo de los vecinos más cercanos, o k-NN por sus siglas del ingles "k-nearest neighborgs", es un algoritmo de aprendizaje supervisado que permite resolver tanto un problema de clasificación como de regresión.
+Se habla de aprendizaje supervisado cuando un algoritmo, para aprender, necesita datos de entrada etiquetados (es decir, entradas con una etiqueta) y datos de salida (es decir, que el algoritmo tendrá que predecir después).
+En el caso del algoritmo k-NN, éste encuentra inicialmente en el conjunto de datos de entrenamiento la observación que más se aproxima. A continuación, asigna la etiqueta de estos datos de entrenamiento a la nueva observación que era desconocida. La k en la fórmula "k-NN" significa que en lugar de conformarse con el único vecino más cercano de la observación desconocida, considera un número fijo k de vecinos del conjunto de entrenamiento. 
+La búsqueda del vecino más cercano implica una función para el cálculo de la distancia que generalmente se basa en la distancia euclidiana, aunque existen otras como la distancia Manhattan, la distancia Canberra, la distancia Minkowski, etc. 
+
+> * Tabla de puntos fuertes y debilidades del algoritmo:
+
+| FORTALEZAS                                                                  	| DEBILIDADES                                                                                                            	|
+|-----------------------------------------------------------------------------	|------------------------------------------------------------------------------------------------------------------------	|
+| - Es simple y efectivo.                                                     	| - No produce un modelo, lo que limita la capacidad de<br>entender cómo se relacionan las características con la clase. 	|
+| - No hace ninguna suposición sobre<br> la distribución de datos subyacente.  	| - Requiere la selección de un k apropiado.                                                                             	|
+| - Tiene una fase de entranamiento rápida.                                   	| - Tiene una fase de clasificación lenta.                                                                               	|
+|                                                                             	| - Las características nominales y los datos que faltan<br> requieren un procesamiento adicional.                        	|
+
+
+
+## Ejercicio 2. Funcion One-hot
+
+Desarrollar una función en R que implemente una codificación “one-hot” (one-hot encoding) de las
+secuencias. Presentar un ejemplo simple de su uso.
+```{r}
+
+f_onehot <- function(x){
+  # Eliminamos los posibles espacios en blanco de la secuencia pasada como parámetro "x" a la función:
+  st <-str_trim(x)
+  
+  # Usamos la función "gsubfn" para aplicar el patrón de remplazo dado.
+  # "A" se representa por (1,0,0,0,0,0,0,0), el nucleótido "G"
+  # por (0,1,0,0,0,0,0,0), el "T" por (0,0,1,0,0,0,0,0) y, finalmente, la "C" por (0,0,0,1,0,0,0,0).
+  # Los caracteres de ambiguedad: "D" por (0,0,0,0,1,0,0,0), la "N" por (0,0,0,0,0,1,0,0), 
+  # la "S" por (0,0,0,0,0,0,1,0) y la "R" por (0,0,0,0,0,0,0,1).
+  
+  # La cadena de sustitución se almacenará en "st_oh":
+  
+  st_oh <-gsubfn(".", list("A" = "10000000",
+                           "G" = "01000000",
+                           "T" = "00100000",
+                           "C" = "00010000",
+                           "D" = "00001000",
+                           "N" = "00000100",
+                           "S" = "00000010",
+                           "R" = "00000001"), st)
+  # Podemos pasar esta variable cadena "v_oh" a un vector de caracteres, partiéndola por cada caracter encontrado:
+  st_oh <- strsplit(st_oh,"")
+  # Y posteriormente a una vector de números:
+  st_oh <- as.numeric(unlist((st_oh)))
+  # Transformamos este vector en dataframe:
+  st_oh <- data.frame(st_oh)
+
+  
+return (st_oh)
+}
+
+# Lectura del fichero de texto "splice.txt" con las secuencias y asignación de su contenido al objeto "sec":
+sec <- read.table("splice.txt", sep=",", header=FALSE)
+# Extraemos la secuencia de la primera fila del dataframe "sec":
+sec[1,3]
+# Aplicamos nuestra función "f_onehot" al dicha cadena, quedando una cadena de caracteres one-hot que
+# almacenaremos en la variable cadena "v_oh":
+df_oh <- f_onehot(sec[1,3])
+str(df_oh)
+# Transponemos df_oh:
+df_oh <- transpose(df_oh)
+str(df_oh)
+
+
+
+```
+
+## Ejercicio 3. Script clasificador k-NN
+
+Desarrollar un script en R que implemente un clasificador knn. El script realiza los siguientes apartados:
+
+(a) Leer los datos del fichero splice.txt y hacer una breve descripción de ellos.
+
+(b) Transformar las secuencias de nucleótidos en vectores numéricos usando la función de transformación
+desarrollada anteriormente. En caso que no se haya implementado la función de codificación
+one-hot, se puede acceder a los datos ya transformados cargando el fichero splice_oh.RData.
+
+(c) Para el subset formado por las secuencias de las clases “EI” y “N”, y para el subset formado por
+las secuencias de las clases “IE” y “N”, realizar la implementación del algoritmo knn, con los
+siguientes pasos:
+
+    i. Utilizando la semilla aleatoria 123, separar los datos en dos partes, una parte para training
+       (67%) y una parte para test (33%).
+    ii. Aplicar el knn (k = 1, 5, 11, 21, 51, 71) basado en el training para predecir que secuencias del
+       test son secuencias con puntos de splicing (splice junctions) o no. Además, realizar una curva
+       ROC para cada k y mostrar el valor de AUC.
+       
+
+(d) Comentar los resultados de la clasificación en función de la curva ROC, valor de AUC y del número
+de falsos positivos, falsos negativos y error de clasificación obtenidos para los diferentes valores de
+k. La clase asignada como positiva son las representan secuencias con puntos de splicing.
+
+```{r}
+
+################# A)
+
+# Lectura del fichero de texto "splice.txt" con las secuencias y asignación de su contenido al objeto "sec":
+sec <- read.table("splice.txt", sep=",", header=FALSE)
+names(sec)[names(sec) == "V1"] <- "splice_type"
+names(sec)[names(sec) == "V2"] <- "adn_seq_name"
+str(sec)
+
+# Como podemos ver tras aplicar la función "str", tenemos un total de 3190 filas de datos clasificados en 3
+# variables: V1, V2 y V3.
+
+# V1: variable de tipo chr que representa el tipo de splice: EI (donor), IE (acceptor) o N (ninguno de los dos).
+# V2: variable de tipo chr que representa el nombre de la secuencia de ADN.
+# V3: variable de tipo chr que representa la secuencia de ADN en sí a través de una combinación de nucleótidos (letras A,G,T,C) 
+#     de caracteres estándares que representan ambigüedad (letras D, N, S o R) siendo:
+#
+#  |caracter  | significado   |
+#  |----------|---------------|
+#  |    D     | A o G o T     |
+#  |    N     | A o G o C o T |
+#  |    S     | C o G         |
+#  |    R     | A o G         |
+
+################# B)
+
+# Transformación de las cadenas de los nucleótidos en en vectores numéricos transformados en dataframe usando la función
+# "f_onehot". Se almacenan en la variable dataframe "sec2" que luego sustituirá al dataframe que corresponde a la columna
+# actual de cadenas de nucleótidos (sec[,3]) como parte del dataframe "sec". El nuevo dataframe "n_sec" contendrá por
+# tanto las dos primeras columnas de "sec" (sec[1:2]) más las nuevas columnas generadas en "sec2":
+sec2 <- as.data.frame(lapply(sec[,3], f_onehot))
+sec2 <- transpose(sec2)
+
+sec1 <- sec[1:2]
+str(sec1)
+
+# Añadimos IDs a cada dataframe para concatenarlos:
+sec1$ID <- seq.int(nrow(sec1))
+sec2$ID <- seq.int(nrow(sec2))
+
+
+# Concatenamos dataframes por IDs:
+n_sec <- merge(sec1,sec2,by=c("ID"))
+#n_sec<-data.frame(sec1,sec2)
+
+# Eliminamos la variable "ID", y a continuación la "adn_seq_name" :
+n_sec <- n_sec[2:483]
+n_sec <- n_sec[-2]
+str(n_sec)
+
+################# C)
+
+# Plantamos la semilla:
+set.seed(123)
+
+# Creación de subset clase IE/N:
+n_sec_ien <- n_sec[n_sec$splice_type=="IE"|n_sec$splice_type=="N",]
+str(n_sec_ien)
+
+# Creación de subset clase EI/N:
+n_sec_ein <- n_sec[n_sec$splice_type=="EI"|n_sec$splice_type=="N",]
+str(n_sec_ein)
+
+# Extracción de las 
+
+# Usamos la función "createDataPartition()" para crear particiones basadas en el 
+# muestreo estratificado de exclusión, siendo
+
+
+
+in_train_ein <- createDataPartition(n_sec_ein$splice_type, p = 0.67, list = FALSE)
+in_train_ien <- createDataPartition(n_sec_ien$splice_type, p = 0.67, list = FALSE)
+
+# "in_train" será el vector que indica los números de fila incluidos en la muestra de entrenamiento.
+# con "p" indicando la proporción de instancias que se incluirán en la partición y
+# "n_sec_ein$splice_type" el vector con los valores de la clase "splice_type" a
+# evaluar. Las muestras se tomarán por tanton del dataframe "ein_train" en la proporción
+# indicada por "p", y complementariamente para las del test almacenadas en "ein_test":
+ein_train <- n_sec_ein[in_train_ein, ]
+ein_test <- n_sec_ein[-in_train_ein, ]
+ien_train <- n_sec_ien[in_train_ien, ]
+ien_test <- n_sec_ien[-in_train_ien, ]
+
+# Calculamos el número total de filas para estos conjuntos que usaremos en la generación 
+# de aleatoriedad en el orden:
+num_ein_train <- nrow(ein_train)
+num_ein_train
+num_ein_test <- nrow(ein_test)
+num_ein_test
+total_ein <- num_ein_train + num_ein_test
+
+# Procedemos igual para "n_sec_ien":
+num_ien_train <- nrow(ien_train)
+num_ien_train
+num_ien_test <- nrow(ien_test)
+num_ien_test
+total_ien <- num_ien_train + num_ien_test
+
+# Vector de ordenación aleatoria de ID de filas:
+random_ids_ei <- order(runif(total_ein))
+random_ids_ie <- order(runif(total_ien))
+
+# Modificación de los dataframes con los valores aleatoreizados:
+ein_train <- ein_train[random_ids_ei[1:num_ein_train], ]
+ein_test <- ein_test[random_ids_ei[(num_ein_train+1):total_ein], ]
+ien_train <- ien_train[random_ids_ie[1:num_ien_train], ]
+ien_test <- ien_test[random_ids_ie[(num_ien_train+1):total_ien], ]
+
+
+# Creación de los vectores etiqueta:
+ein_train_labels <- n_sec_ein[in_train_ein, 1]
+ein_test_labels <- n_sec_ein[-in_train_ein, 1]
+
+ien_train_labels <- n_sec_ien[in_train_ien, 1]
+ien_test_labels <- n_sec_ien[-in_train_ien, 1]
+
+summary (ein_train_labels)
+summary (ein_test_labels)
+summary (ien_train_labels)
+summary (ien_test_labels)
+
+
+# Aplicamos el algoritmo k-NN:
+
+# Para k=1
+ein_test_pred <- knn(train = ein_train, test = ein_test,
+                        cl = ein_train_labels, k = 1)
+
+# Para k=5
+# Para k=11
+# Para k=21
+# Para k=51
+# Para k=71
+
+```
+
+## Fuentes de información
+
+
+- https://www.rdocumentation.org/packages/mltools/versions/0.3.5/topics/one_hot
+- https://cran.r-project.org/web/packages/readtext/vignettes/readtext_vignette.html
+- https://www.datacamp.com/community/tutorials/r-data-import-tutorial
+- https://www.journaldev.com/43690/sub-and-gsub-function-r
+- https://stackoverflow.com/questions/33949945/replace-multiple-strings-in-one-gsub-or-chartr-statement-in-r/33950155
+- https://stackoverflow.com/questions/30519673/cant-resolve-error-in-rmd-file-anonymous-withcallinghandlers-withvisi
+- https://stat.ethz.ch/R-manual/R-devel/library/base/html/strsplit.html
+- https://www.ling.upenn.edu/~joseff/rstudy/week2.html
+- https://r-lang.com/how-to-convert-list-to-numeric-value-in-r/
+- https://www.geeksforgeeks.org/creating-a-data-frame-from-vectors-in-r-programming/
+- https://datacornering.com/how-to-rename-data-frame-columns-in-r/
+- https://www.geeksforgeeks.org/change-column-name-of-a-given-dataframe-in-r/
+- https://stackoverflow.com/questions/26234123/generate-vector-of-a-repeated-string-with-incremental-suffix-number
+- https://stackoverflow.com/questions/18503177/r-apply-function-on-specific-dataframe-columns
+- https://rpubs.com/Mentors_Ubiqum/Transpose_Dataframe
+- https://stackoverflow.com/questions/8169323/r-concatenate-two-dataframes
+- https://stackoverflow.com/questions/23518605/add-an-index-numeric-id-column-to-large-data-frame
+- https://www.statmethods.net/management/merging.html
+- https://archive.ics.uci.edu/ml/datasets/Molecular+Biology+(Splice-junction+Gene+Sequences)
+
+
+
