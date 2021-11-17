@@ -3,4 +3,5 @@ Machine learning examples:
 
 
 
-001 - wisc_bc_data - Wisconsin Breast Cancer Diagnostic dataset (dataset + Rmd)
+001 - Non-parametric algorithm: k-NN. 
+      wisc_bc_data - Wisconsin Breast Cancer Diagnostic dataset (dataset + Rmd)
